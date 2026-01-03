@@ -12,20 +12,20 @@ A library for drawing charts in the kOS terminal using Braille characters. It al
 
 ## Installation
 
-Copy the `canvas.ks` and `chart.ks` files to your ship's volume (e.g., `0:/` or `1:/`).
+Place the `canvas.ks` and `chart.ks` files in your `Ships/Script` folder (the Archive `0:/`).
 
-```kos
-COPYPATH("0:/canvas.ks", "1:/").
-COPYPATH("0:/chart.ks", "1:/").
-```
+
 
 ## Usage
 
 ### 1. Import libraries
 
+You must run the library files to load the functions into memory. Ensure `canvas.ks` is loaded before creating a chart.
+
 ```kos
-RUNPATH("1:/canvas.ks").
-RUNPATH("1:/chart.ks").
+// Run from Archive
+RUNPATH("0:/canvas.ks").
+RUNPATH("0:/chart.ks").
 ```
 
 ### 2. Chart Initialization

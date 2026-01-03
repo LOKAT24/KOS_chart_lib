@@ -21,8 +21,6 @@ GLOBAL FUNCTION Chart {
         RETURN ROUND(val, 0) + "".
     }
 
-    // Obliczamy maksymalna dlugosc etykiety osi Y (dla marginesu)
-    // Zakladamy ze najdluzsza etykieta to albo minY albo maxY
     LOCAL maxLabelLen IS formatLabel(maxY):LENGTH.
     LOCAL minLabelLen IS formatLabel(minY):LENGTH.
     
@@ -33,28 +31,24 @@ GLOBAL FUNCTION Chart {
     
     LOCAL marginBottom IS 1.
 
-    // Przesuwamy canvas, zeby zrobic miejsce na opisy
     LOCAL canvasX IS originX + marginLeft.
     LOCAL canvasY IS originY + marginTop.
     
-    // Obliczamy wymiary canvasu (pomniejszone o marginesy)
-    // width/height to wymiary calego widgetu w pikselach
-    // 1 char = 2 px szerokosci, 4 px wysokosci
+
     LOCAL canvasWidth IS width - (marginLeft * 2).
     LOCAL canvasHeight IS height - ((marginTop + marginBottom) * 4).
     
     SET canvasWidth TO MAX(1, canvasWidth).
     SET canvasHeight TO MAX(1, canvasHeight).
 
-    // Rysujemy tytul (wysrodkowany wzgledem calego obszaru wykresu)
+
     IF title:LENGTH > 0 {
-        // Szerokosc calego komponentu w znakach
         LOCAL totalWidthChars IS CEILING(width / 2).
         LOCAL titleX IS originX + FLOOR((totalWidthChars - title:LENGTH) / 2).
         PRINT title AT(MAX(originX, titleX), originY).
     }
     
-    SET CONFIG:IPU TO 10000. // Możesz ustawić nawet więcej, np. 4000
+    SET CONFIG:IPU TO 4000.
     LOCAL c IS Canvas(canvasWidth, canvasHeight, canvasX, canvasY).
     LOCAL ctx IS LEXICON().
     SET ctx["c"] TO c.
@@ -70,20 +64,16 @@ GLOBAL FUNCTION Chart {
     SET ctx["originY"] TO originY.
     SET ctx["plotMode"] TO plotMode.
     
-    // Sentinel values for "no previous point"
     SET ctx["lastX"] TO -999999. 
     SET ctx["lastY"] TO -999999.
     SET ctx["firstPoint"] TO TRUE.
 
     LOCAL api IS LEXICON().
 
-    // Rysuje osie i etykiety
-    // stepX, stepY: co ile jednostek rysowac ticki
-    // scaleX, scaleY: przez ile podzielic wartosc etykiety (np. 1000 dla km)
-    api:ADD("drawAxes", {
+        api:ADD("drawAxes", {
         PARAMETER stepX, stepY, scaleX IS 1, scaleY IS 1.
         
-        // Zapisz parametry do odswiezania
+
         SET ctx["stepX"] TO stepX.
         SET ctx["stepY"] TO stepY.
         SET ctx["scaleX"] TO scaleX.
@@ -96,7 +86,6 @@ GLOBAL FUNCTION Chart {
         LOCAL oy IS ctx["oy"].
         LOCAL line IS c["line"].
 
-        // Czyszczenie obszaru etykiet (Y-axis)
         LOCAL clearWidthY IS ox - ctx["originX"].
         LOCAL clearHeightY IS CEILING(h / 4).
         IF clearWidthY > 0 {
@@ -107,26 +96,26 @@ GLOBAL FUNCTION Chart {
             }
         }
 
-        // Czyszczenie obszaru etykiet (X-axis)
+
         LOCAL clearWidthX IS CEILING(w / 2).
-        LOCAL clearHeightX IS 1. // Zakladamy 1 wiersz na etykiety X
+        LOCAL clearHeightX IS 1. 
         LOCAL emptyStrX IS "".
         FROM {LOCAL i IS 0.} UNTIL i >= clearWidthX STEP {SET i TO i + 1.} DO { SET emptyStrX TO emptyStrX + " ". }
         FROM {LOCAL rowIdx IS 0.} UNTIL rowIdx < clearHeightX STEP {SET rowIdx TO rowIdx + 1.} DO {
              PRINT emptyStrX AT(ox, oy + CEILING(h / 4) + rowIdx).
         }
 
-        // Linie osi
-        line:CALL(0, 0, 0, h - 1). // Os Y
-        line:CALL(0, h - 1, w - 1, h - 1). // Os X
 
-        // Ticki i etykiety osi Y
+        line:CALL(0, 0, 0, h - 1). 
+        line:CALL(0, h - 1, w - 1, h - 1). 
+
+
         FROM {LOCAL val IS ctx["minY"].} UNTIL val > ctx["maxY"] STEP {SET val TO val + stepY.} DO {
             LOCAL pct IS (val - ctx["minY"]) / (ctx["maxY"] - ctx["minY"]).
             LOCAL yPix IS (h - 1) - (pct * (h - 1)).
             SET yPix TO MAX(0, MIN(h - 1, yPix)).
             
-            line:CALL(0, yPix, 4, yPix). // Tick dlugosci 4px
+            line:CALL(0, yPix, 4, yPix). 
             
             LOCAL label IS formatLabel(val / scaleY).
             
@@ -136,13 +125,13 @@ GLOBAL FUNCTION Chart {
             IF col >= 0 { PRINT label AT(col, row). }
         }
 
-        // Ticki i etykiety osi X
+
         FROM {LOCAL val IS ctx["minX"].} UNTIL val > ctx["maxX"] STEP {SET val TO val + stepX.} DO {
             LOCAL pct IS (val - ctx["minX"]) / (ctx["maxX"] - ctx["minX"]).
             LOCAL xPix IS pct * (w - 1).
             SET xPix TO MAX(0, MIN(w - 1, xPix)).
 
-            line:CALL(xPix, h - 1, xPix, h - 5). // Tick dlugosci 4px w gore
+            line:CALL(xPix, h - 1, xPix, h - 5).
 
             LOCAL label IS formatLabel(val / scaleX).
 
@@ -151,34 +140,29 @@ GLOBAL FUNCTION Chart {
             PRINT label AT(col, row).
         }
         
-        c["draw"]:CALL(ox, oy, TRUE). // Wymus odswiezenie
+        c["draw"]:CALL(ox, oy, TRUE).
     }).
 
-    // Dodaje punkt do wykresu
     api:ADD("plot", {
         PARAMETER x, y.
         LOCAL c IS ctx["c"].
         LOCAL redrawNeeded IS FALSE.
         
-        // Obsluga przewijania X (Paging)
         LOCAL rangeX IS ctx["maxX"] - ctx["minX"].
         IF x > ctx["maxX"] {
-            // Przesuwamy okno az punkt sie zmiesci
             UNTIL x <= ctx["maxX"] {
                 SET ctx["minX"] TO ctx["minX"] + rangeX.
                 SET ctx["maxX"] TO ctx["maxX"] + rangeX.
             }
             SET redrawNeeded TO TRUE.
         } ELSE IF x < ctx["minX"] {
-            // Przesuwamy okno w lewo
             UNTIL x >= ctx["minX"] {
                 SET ctx["minX"] TO ctx["minX"] - rangeX.
                 SET ctx["maxX"] TO ctx["maxX"] - rangeX.
             }
             SET redrawNeeded TO TRUE.
         }
-        
-        // Obsluga przewijania Y (Paging)
+
         LOCAL rangeY IS ctx["maxY"] - ctx["minY"].
         IF y > ctx["maxY"] {
              UNTIL y <= ctx["maxY"] {
@@ -195,15 +179,12 @@ GLOBAL FUNCTION Chart {
         }
 
         IF redrawNeeded {
-            // Czyscimy plot
             c["clear"]:CALL().
             
-            // Rysujemy osie na nowo (z nowymi etykietami)
             IF ctx:HASKEY("stepX") {
                 api["drawAxes"]:CALL(ctx["stepX"], ctx["stepY"], ctx["scaleX"], ctx["scaleY"]).
             }
             
-            // Resetujemy linie (zeby nie laczyc z punktem z poprzedniej strony)
             SET ctx["firstPoint"] TO TRUE.
         }
         
@@ -213,14 +194,14 @@ GLOBAL FUNCTION Chart {
         LOCAL setPixel IS c["set"].
         LOCAL draw IS c["draw"].
 
-        // Skalowanie
+
         LOCAL pctX IS (x - ctx["minX"]) / (ctx["maxX"] - ctx["minX"]).
         LOCAL pctY IS (y - ctx["minY"]) / (ctx["maxY"] - ctx["minY"]).
 
         LOCAL px IS pctX * (w - 1).
         LOCAL py IS (h - 1) - (pctY * (h - 1)).
 
-        // Clamp
+
         SET px TO MAX(0, MIN(w - 1, px)).
         SET py TO MAX(0, MIN(h - 1, py)).
 
@@ -234,7 +215,6 @@ GLOBAL FUNCTION Chart {
                 draw:CALL().
             }
         } ELSE {
-            // Rysuj jesli punkt zmienil pozycje (w dowolna strone)
             IF px <> ctx["lastX"] OR py <> ctx["lastY"] { 
                 IF ctx["plotMode"] = "POINT" {
                     setPixel:CALL(px, py, 1).

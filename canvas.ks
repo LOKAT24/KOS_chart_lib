@@ -16,26 +16,20 @@ GLOBAL FUNCTION Canvas {
         ctx["buffer"]:ADD(0).
     }
 
-    // Cache znakow Braille'a (optymalizacja)
     LOCAL charCache IS LIST().
     FROM {LOCAL i IS 0.} UNTIL i > 255 STEP {SET i TO i + 1.} DO {
         charCache:ADD(CHAR(10240 + i)).
     }
 
-    // Cache wierszy (stringow) i flagi dirty
     SET ctx["rows"] TO LIST().
     SET ctx["dirty"] TO LIST().
     FROM {LOCAL i IS 0.} UNTIL i >= ctx["h"] STEP {SET i TO i + 1.} DO {
         ctx["rows"]:ADD("").
         ctx["dirty"]:ADD(TRUE).
     }
-
-    // Splaszczona tablica masek dla szybszego dostepu
     // x=0: 1, 2, 4, 64; x=1: 8, 16, 32, 128
     LOCAL masks IS LIST(1, 2, 4, 64, 8, 16, 32, 128).
 
-    // Precompute mapowania wspolrzednych piksela -> (komorka, offset)
-    // Zdejmuje FLOOR/dzielenia z goracej sciezki set_pixel_raw.
     SET ctx["xCell"] TO LIST().
     SET ctx["xSub"] TO LIST().
     FROM {LOCAL i IS 0.} UNTIL i >= ctx["px_w"] STEP {SET i TO i + 1.} DO {
@@ -52,7 +46,6 @@ GLOBAL FUNCTION Canvas {
         ctx["ySub"]:ADD(i - (cy * 4)).
     }
 
-    // Lokalna funkcja ustawiania piksela (szybsza niz api:set w petli)
     LOCAL FUNCTION set_pixel_raw {
         PARAMETER x, y, val.
 
@@ -65,7 +58,6 @@ GLOBAL FUNCTION Canvas {
         LOCAL mask IS masks[sx * 4 + sy].
         LOCAL cur IS ctx["buffer"][idx].
 
-        // Symulacja operacji bitowych (maska to potega 2)
         LOCAL temp IS FLOOR(cur / mask).
         LOCAL is_set IS temp - 2 * FLOOR(temp / 2).
 
@@ -142,7 +134,6 @@ GLOBAL FUNCTION Canvas {
         LOCAL px_h IS ctx["px_h"].
 
         UNTIL FALSE {
-            // Bezposrednie wywolanie lokalnej funkcji
             IF x0 >= 0 AND x0 < px_w AND y0 >= 0 AND y0 < px_h {
                 set_pixel_raw(x0, y0, val).
             }

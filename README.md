@@ -7,7 +7,7 @@ A library for drawing charts in the kOS terminal using Braille characters. It al
 *   **High Resolution:** Uses Unicode Braille characters to pack 8 pixels into a single terminal character (2x4 grid).
 *   **Chart Drawing:** Easily create line or scatter plots.
 *   **Automatic Axes:** Draws X and Y axes with labels and ticks.
-*   **Paging:** Automatic handling of data exceeding the X-axis range (paging).
+*   **Paging:** Automatic handling of data exceeding the X or Y axis range (paging).
 *   **Performance:** Optimized rendering (buffering, dirty flags).
 
 ## Font Configuration
@@ -43,8 +43,9 @@ The `Chart` function accepts the following parameters:
 *   `originX`, `originY`: Top-left corner position in the terminal (in characters).
 *   `minX`, `maxX`: X-axis range.
 *   `minY`, `maxY`: Y-axis range.
-*   `title`: Chart title.
-*   `plotMode`: "LINE" (continuous line) or "POINT" (points).
+*   `title`: Chart title (optional, default "").
+*   `plotMode`: "LINE" (continuous line) or "POINT" (points) (optional, default "LINE").
+*   `enablePaging`: Boolean to enable/disable automatic paging when X exceeds range (optional, default TRUE).
 
 ```kos
 // Example: 100x100 pixel chart
@@ -61,19 +62,33 @@ GLOBAL myChart IS Chart(
 ### 3. Drawing Axes
 
 ```kos
-// drawAxes(stepX, stepY, scaleX, scaleY)
+// drawAxes(stepX, stepY, scaleX, scaleY, clearOnly)
+// scaleX/Y: Divisor for labels (default 1)
+// clearOnly: If TRUE, clears the axes instead of drawing (default FALSE)
 myChart["drawAxes"](10, 2). 
 ```
 
 ### 4. Adding Data
 
-In the main program loop, add points using the `plot(x, y)` method.
+In the main program loop, add points using the `plot(x, y, autoDraw)` method.
+
+*   `x`, `y`: Coordinates to plot.
+*   `autoDraw`: If TRUE, calls `draw()` immediately after plotting (default TRUE). Set to FALSE for batch plotting.
 
 ```kos
 UNTIL FALSE {
     myChart["plot"](TIME:SECONDS, SHIP:ALTITUDE).
     WAIT 0.1.
 }
+```
+
+### 5. Manual Drawing
+
+The `draw(force)` method renders the chart to the terminal.
+*   `force`: If TRUE, redraws all characters even if they haven't changed (default FALSE).
+
+```kos
+myChart["draw"](TRUE). // Force full redraw
 ```
 
 ## Example

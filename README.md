@@ -10,6 +10,14 @@ A library for drawing charts in the kOS terminal using Braille characters. It al
 *   **Paging:** Automatic handling of data exceeding the X-axis range (paging).
 *   **Performance:** Optimized rendering (buffering, dirty flags).
 
+## Font Configuration
+
+**Important:** To display the charts correctly, you must change the kOS terminal font to one that supports Braille characters (e.g., **Cascadia Code**).
+
+1.  Open the kOS App Control Panel in-game.
+2.  Go to Settings / Terminal Font.
+3.  Select **Cascadia Code** or another font with Braille support.
+
 ## Installation
 
 Place the `canvas.ks` and `chart.ks` files in your `Ships/Script` folder (the Archive `0:/`).

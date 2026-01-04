@@ -11,7 +11,6 @@ PRINT "=== KOS CHART BENCHMARK ===" AT(0,0).
 PRINT "Loading libraries..." AT(0,1).
 
 LOCAL tStartLoad IS TIME:SECONDS.
-RUNPATH("0:/canvas.ks").
 RUNPATH("0:/chart.ks").
 PRINT "Load time: " + ROUND(TIME:SECONDS - tStartLoad, 4) + "s" AT(0,2).
 

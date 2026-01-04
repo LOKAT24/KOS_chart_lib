@@ -9,7 +9,6 @@ SET CONFIG:IPU TO 2000.
 CLEARSCREEN.
 
 // 2. IMPORT LIBRARIES
-RUNPATH("0:/canvas.ks").
 RUNPATH("0:/chart.ks").
 
 PRINT "Initializing graph..." AT(0,0).

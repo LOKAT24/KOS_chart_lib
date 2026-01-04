@@ -8,7 +8,24 @@ A library for drawing charts in the kOS terminal using Braille characters. It al
 *   **Chart Drawing:** Easily create line or scatter plots.
 *   **Automatic Axes:** Draws X and Y axes with labels and ticks.
 *   **Paging:** Automatic handling of data exceeding the X or Y axis range (paging).
-*   **Performance:** Optimized rendering (buffering, dirty flags).
+*   **High Performance:** 
+    *   **Fast Initialization:** Uses static Look-Up Tables (LUTs) and `SUBLIST` for near-instant chart creation (0.4s vs 17s for 50 charts).
+    *   **Optimized Rendering:** Uses dirty-row tracking to only redraw changed parts of the screen.
+    *   **Inlined Math:** Critical drawing functions use inlined Bresenham's algorithm and integer math for maximum speed.
+
+## Benchmarking
+
+The library includes a `benchmark.ks` script to test performance on your machine.
+
+```kos
+RUNPATH("0:/benchmark.ks").
+```
+
+The benchmark tests:
+1.  **Initialization:** Creating multiple chart instances.
+2.  **Plotting:** Calculating and setting pixels for thousands of points.
+3.  **Rendering:** Refresh rate of the terminal output.
+4.  **Paging:** Performance of clearing and redrawing axes when the chart scrolls.
 
 ## Font Configuration
 
@@ -21,6 +38,7 @@ A library for drawing charts in the kOS terminal using Braille characters. It al
 ## Installation
 
 Place the `canvas.ks` and `chart.ks` files in your `Ships/Script` folder (the Archive `0:/`).
+Optionally, include `example.ks` and `benchmark.ks` for testing.
 
 
 
@@ -32,7 +50,6 @@ You must run the library files to load the functions into memory. Ensure `canvas
 
 ```kos
 // Run from Archive
-RUNPATH("0:/canvas.ks").
 RUNPATH("0:/chart.ks").
 ```
 

@@ -25,7 +25,8 @@ GLOBAL FUNCTION Chart {
     LOCAL maxLabelLen IS formatLabel(maxY):LENGTH.
     LOCAL minLabelLen IS formatLabel(minY):LENGTH.
     
-    LOCAL marginLeft IS MAX(maxLabelLen, minLabelLen) + 1.
+    // Enforce minimum margin of 4 chars for labels + 1 spacer
+    LOCAL marginLeft IS MAX(MAX(maxLabelLen, minLabelLen), 4) + 1.
 
     LOCAL marginTop IS 0.
     IF title:LENGTH > 0 { SET marginTop TO 1. }
@@ -60,6 +61,23 @@ GLOBAL FUNCTION Chart {
     LOCAL oy IS c["originY"].
     LOCAL currentPlotMode IS plotMode.
     
+    // CACHED DELEGATES (Avoid lexicon lookup in loops)
+    LOCAL canvas_fastLine IS c["fastLine"].
+    LOCAL canvas_set IS c["set"].
+    LOCAL canvas_draw IS c["draw"].
+    LOCAL canvas_clear IS c["clear"].
+
+    // PRECALCULATED MATH
+    LOCAL rangeX IS maxX - minX.
+    LOCAL rangeY IS maxY - minY.
+    LOCAL recipRangeX IS 0. IF rangeX <> 0 { SET recipRangeX TO 1.0 / rangeX. }
+    LOCAL recipRangeY IS 0. IF rangeY <> 0 { SET recipRangeY TO 1.0 / rangeY. }
+    
+    LOCAL wMinus1 IS w - 1.
+    LOCAL hMinus1 IS h - 1.
+    LOCAL factorX IS recipRangeX * wMinus1.
+    LOCAL factorY IS recipRangeY * hMinus1.
+
     LOCAL axisStepX IS 0.
     LOCAL axisStepY IS 0.
     LOCAL axisScaleX IS 1.
@@ -69,79 +87,110 @@ GLOBAL FUNCTION Chart {
     LOCAL lastX IS -999999. 
     LOCAL lastY IS -999999.
     LOCAL firstPoint IS TRUE.
+    
+    LOCAL paddingSpaces IS "          ". // 10 spaces for padding
 
     LOCAL api IS LEXICON().
 
     api:ADD("drawAxes", {
         PARAMETER stepX, stepY, scaleX IS 1, scaleY IS 1, clearOnly IS FALSE.
         
-        IF NOT clearOnly {
-            SET axisStepX TO stepX.
-            SET axisStepY TO stepY.
-            SET axisScaleX TO scaleX.
-            SET axisScaleY TO scaleY.
-            SET axesDefined TO TRUE.
-        }
-        
-        LOCAL line IS c["line"].
+        IF clearOnly {
+            // OPTIMIZED BULK CLEAR
+            // Clear Y-Axis area (Left margin)
+            // Extend clearing to the left (safeMargin) to catch labels that grew longer than initial margin
+            LOCAL safeMargin IS 8.
+            LOCAL clearX IS MAX(0, originX - safeMargin).
+            LOCAL clearW IS ox - clearX.
 
-        IF NOT clearOnly {
-            line:CALL(0, 0, 0, h - 1).
-            line:CALL(0, h - 1, w - 1, h - 1).
+            IF clearW > 0 {
+                LOCAL emptyY IS "".
+                FROM {LOCAL i IS 0.} UNTIL i >= clearW STEP {SET i TO i + 1.} DO { SET emptyY TO emptyY + " ". }
+                LOCAL rowsY IS CEILING(h / 4).
+                FROM {LOCAL i IS 0.} UNTIL i <= rowsY STEP {SET i TO i + 1.} DO {
+                    PRINT emptyY AT(clearX, oy + i).
+                }
+            }
+            
+            // Clear X-Axis area (Bottom margin)
+            LOCAL rowX IS oy + CEILING(h / 4).
+            LOCAL emptyX IS "".
+            // Extend clearing to cover labels protruding to the right
+            LOCAL clearLen IS CEILING(width / 2) + 8. 
+            FROM {LOCAL i IS 0.} UNTIL i >= clearLen STEP {SET i TO i + 1.} DO { SET emptyX TO emptyX + " ". }
+            PRINT emptyX AT(originX, rowX).
+            
+            RETURN.
         }
+
+        SET axisStepX TO stepX.
+        SET axisStepY TO stepY.
+        SET axisScaleX TO scaleX.
+        SET axisScaleY TO scaleY.
+        SET axesDefined TO TRUE.
+        
+        LOCAL line IS canvas_fastLine.
+
+        line:CALL(0, 0, 0, h - 1).
+        line:CALL(0, h - 1, w - 1, h - 1).
 
         FROM {LOCAL val IS currentMinY.} UNTIL val > currentMaxY STEP {SET val TO val + stepY.} DO {
-            LOCAL pct IS (val - currentMinY) / (currentMaxY - currentMinY).
-            LOCAL yPix IS (h - 1) - (pct * (h - 1)).
-            SET yPix TO MAX(0, MIN(h - 1, yPix)).
+            LOCAL yPix IS hMinus1 - (val - currentMinY) * factorY.
+            IF yPix < 0 { SET yPix TO 0. } ELSE IF yPix > hMinus1 { SET yPix TO hMinus1. }
             
-            IF NOT clearOnly {
-                line:CALL(0, yPix, 4, yPix).
-            }
+            line:CALL(0, yPix, 4, yPix).
             
             LOCAL label IS formatLabel(val / scaleY).
             
+            // PADDING LOGIC: Pad label with spaces to clear previous values
+            LOCAL targetLen IS marginLeft - 1.
+            IF label:LENGTH < targetLen {
+                LOCAL pad IS targetLen - label:LENGTH.
+                IF pad <= 10 {
+                    SET label TO paddingSpaces:SUBSTRING(0, pad) + label.
+                } ELSE {
+                    // Fallback for huge padding
+                    FROM {LOCAL i IS 0.} UNTIL i >= pad STEP {SET i TO i + 1.} DO { SET label TO " " + label. }
+                }
+            }
+
             LOCAL labelLen IS label:LENGTH.
             LOCAL col IS ox - labelLen - 1.
             LOCAL row IS oy + FLOOR(yPix / 4).
             IF col >= 0 { 
-                IF clearOnly {
-                    LOCAL emptyStr IS "".
-                    FROM {LOCAL i IS 0.} UNTIL i >= labelLen STEP {SET i TO i + 1.} DO { SET emptyStr TO emptyStr + " ". }
-                    PRINT emptyStr AT(col, row).
-                } ELSE {
-                    PRINT label AT(col, row). 
-                }
+                PRINT label AT(col, row). 
             }
         }
+
+        LOCAL xAxisStr IS "".
+        LOCAL rowX IS oy + CEILING(h / 4).
 
         FROM {LOCAL val IS currentMinX.} UNTIL val > currentMaxX STEP {SET val TO val + stepX.} DO {
-            LOCAL pct IS (val - currentMinX) / (currentMaxX - currentMinX).
-            LOCAL xPix IS pct * (w - 1).
-            SET xPix TO MAX(0, MIN(w - 1, xPix)).
+            LOCAL xPix IS (val - currentMinX) * factorX.
+            IF xPix < 0 { SET xPix TO 0. } ELSE IF xPix > wMinus1 { SET xPix TO wMinus1. }
 
-            IF NOT clearOnly {
-                line:CALL(xPix, h - 1, xPix, h - 5).
-            }
+            line:CALL(xPix, h - 1, xPix, h - 5).
 
             LOCAL label IS formatLabel(val / scaleX).
-
-            LOCAL col IS ox + FLOOR(xPix / 2).
-            LOCAL row IS oy + CEILING(h / 4). 
+            LOCAL targetRelCol IS FLOOR(xPix / 2).
             
-            IF clearOnly {
-                LOCAL labelLen IS label:LENGTH.
-                LOCAL emptyStr IS "".
-                FROM {LOCAL i IS 0.} UNTIL i >= labelLen STEP {SET i TO i + 1.} DO { SET emptyStr TO emptyStr + " ". }
-                PRINT emptyStr AT(col, row).
+            LOCAL currentLen IS xAxisStr:LENGTH.
+            
+            IF targetRelCol > currentLen {
+                LOCAL spaces IS targetRelCol - currentLen.
+                IF spaces <= 10 {
+                    SET xAxisStr TO xAxisStr + paddingSpaces:SUBSTRING(0, spaces).
+                } ELSE {
+                    FROM {LOCAL i IS 0.} UNTIL i >= spaces STEP {SET i TO i + 1.} DO { SET xAxisStr TO xAxisStr + " ". }
+                }
+                SET xAxisStr TO xAxisStr + label.
             } ELSE {
-                PRINT label AT(col, row).
+                SET xAxisStr TO xAxisStr:SUBSTRING(0, targetRelCol) + label.
             }
         }
+        PRINT xAxisStr AT(ox, rowX).
         
-        IF NOT clearOnly {
-            c["draw"]:CALL(ox, oy, TRUE).
-        }
+        canvas_draw:CALL(ox, oy, TRUE).
     }).
 
     api:ADD("plot", {
@@ -153,40 +202,46 @@ GLOBAL FUNCTION Chart {
         LOCAL newMinY IS currentMinY.
         LOCAL newMaxY IS currentMaxY.
         
-        LOCAL rangeX IS currentMaxX - currentMinX.
         IF x > currentMaxX {
             IF enablePaging {
-                UNTIL x <= newMaxX {
-                    SET newMinX TO newMinX + rangeX.
-                    SET newMaxX TO newMaxX + rangeX.
-                }
+                LOCAL diff IS x - currentMaxX.
+                LOCAL pages IS CEILING(diff * recipRangeX).
+                IF pages = 0 { SET pages TO 1. } 
+                LOCAL shift IS pages * rangeX.
+                SET newMinX TO newMinX + shift.
+                SET newMaxX TO newMaxX + shift.
                 SET redrawNeeded TO TRUE.
             }
         } ELSE IF x < currentMinX {
             IF enablePaging {
-                UNTIL x >= newMinX {
-                    SET newMinX TO newMinX - rangeX.
-                    SET newMaxX TO newMaxX - rangeX.
-                }
+                LOCAL diff IS currentMinX - x.
+                LOCAL pages IS CEILING(diff * recipRangeX).
+                IF pages = 0 { SET pages TO 1. }
+                LOCAL shift IS pages * rangeX.
+                SET newMinX TO newMinX - shift.
+                SET newMaxX TO newMaxX - shift.
                 SET redrawNeeded TO TRUE.
             }
         }
         
-        LOCAL rangeY IS currentMaxY - currentMinY.
         IF y > currentMaxY {
              IF enablePaging {
-                 UNTIL y <= newMaxY {
-                    SET newMinY TO newMinY + rangeY.
-                    SET newMaxY TO newMaxY + rangeY.
-                }
+                LOCAL diff IS y - currentMaxY.
+                LOCAL pages IS CEILING(diff * recipRangeY).
+                IF pages = 0 { SET pages TO 1. }
+                LOCAL shift IS pages * rangeY.
+                SET newMinY TO newMinY + shift.
+                SET newMaxY TO newMaxY + shift.
                 SET redrawNeeded TO TRUE.
              }
         } ELSE IF y < currentMinY {
              IF enablePaging {
-                 UNTIL y >= newMinY {
-                    SET newMinY TO newMinY - rangeY.
-                    SET newMaxY TO newMaxY - rangeY.
-                }
+                LOCAL diff IS currentMinY - y.
+                LOCAL pages IS CEILING(diff * recipRangeY).
+                IF pages = 0 { SET pages TO 1. }
+                LOCAL shift IS pages * rangeY.
+                SET newMinY TO newMinY - shift.
+                SET newMaxY TO newMaxY - shift.
                 SET redrawNeeded TO TRUE.
              }
         }
@@ -201,7 +256,7 @@ GLOBAL FUNCTION Chart {
             SET currentMinY TO newMinY.
             SET currentMaxY TO newMaxY.
             
-            c["clear"]:CALL().
+            canvas_clear:CALL().
             
             IF axesDefined {
                 api["drawAxes"]:CALL(axisStepX, axisStepY, axisScaleX, axisScaleY).
@@ -210,18 +265,15 @@ GLOBAL FUNCTION Chart {
             SET firstPoint TO TRUE.
         }
         
-        LOCAL line IS c["line"].
-        LOCAL setPixel IS c["set"].
-        LOCAL draw IS c["draw"].
+        LOCAL line IS canvas_fastLine.
+        LOCAL setPixel IS canvas_set.
+        LOCAL draw IS canvas_draw.
 
-        LOCAL pctX IS (x - currentMinX) / (currentMaxX - currentMinX).
-        LOCAL pctY IS (y - currentMinY) / (currentMaxY - currentMinY).
+        LOCAL px IS (x - currentMinX) * factorX.
+        LOCAL py IS hMinus1 - (y - currentMinY) * factorY.
 
-        LOCAL px IS pctX * (w - 1).
-        LOCAL py IS (h - 1) - (pctY * (h - 1)).
-
-        SET px TO MAX(0, MIN(w - 1, px)).
-        SET py TO MAX(0, MIN(h - 1, py)).
+        IF px < 0 { SET px TO 0. } ELSE IF px > wMinus1 { SET px TO wMinus1. }
+        IF py < 0 { SET py TO 0. } ELSE IF py > hMinus1 { SET py TO hMinus1. }
 
         IF firstPoint {
             SET lastX TO px.
@@ -249,7 +301,7 @@ GLOBAL FUNCTION Chart {
 
     api:ADD("draw", {
         PARAMETER force IS FALSE.
-        c["draw"]:CALL(ox, oy, force).
+        canvas_draw:CALL(ox, oy, force).
     }).
 
     RETURN api.
